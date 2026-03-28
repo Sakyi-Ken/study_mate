@@ -47,7 +47,7 @@ WELCOME_MSG = (
 MODE_CONFIRMATIONS = {
     "conversational": "💬 Conversational mode activated. Go ahead, ask me anything! If you want to use customized study materials, please upload a PDF with the course name as the caption.",
     "read_slide": "📖 Read Slide mode activated. Please send me your slide (image or file).",
-    "/audio_to_notes": "🎙️ Audio to Notes mode activated. Send me a voice note and I'll convert it into clean, structured notes.",
+    "audio_to_notes": "🎙️ Audio to Notes mode activated. Send me a voice note and I'll convert it into clean, structured notes.",
     "course_advising": "📚 Course Advising mode activated. Tell me about your course or what you need help with.",
 }
 
@@ -55,6 +55,7 @@ SLASH_COMMANDS = {
     "/conversational": "conversational",
     "/read_slide": "read_slide",
     "/audio_to_notes" : "audio_to_notes",
+    "/audio_to_note": "audio_to_notes",
     "/course_advising": "course_advising",
 }
 
@@ -134,14 +135,17 @@ async def handle_update(update: dict):
             if current_mode == "audio_to_notes":
                 doc = message["document"]
                 mime_type = doc.get("mime_type", "")
+                file_name = doc.get("file_name", "lecture_audio")
+                file_ext = file_name.split(".")[-1].lower() if "." in file_name else ""
+                allowed_audio_ext = {"mp3", "m4a", "wav", "ogg", "aac", "flac", "opus", "webm"}
 
-                if not mime_type.startswith("audio/"):
+                is_audio_document = mime_type.startswith("audio/") or file_ext in allowed_audio_ext
+                if not is_audio_document:
                     await send_text_message(chat_id, "For audio_to_notes, please upload a lecture audio file or send a voice note.")
                     return
 
                 file_id = doc["file_id"]
-                file_name = doc.get("file_name", "lecture_audio")
-                file_ext = file_name.split(".")[-1].lower() if "." in file_name else "bin"
+                file_ext = file_ext or "bin"
                 await send_text_message(chat_id, f"🎧 Received '{file_name}'. Transcribing your lecture audio...")
 
                 audio_path = await process_audio_file(file_id, file_ext=file_ext)
