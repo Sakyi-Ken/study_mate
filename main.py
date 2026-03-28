@@ -270,8 +270,14 @@ async def handle_update(update: dict):
             context = ""
             if current_mode == "conversational" and chat_id in user_courses:
                 course = user_courses[chat_id]
+                logger.info(f"Retrieving chunks for voice msg, chat {chat_id}, course: {course}")
                 try:
                     context = await retrieve_chunks(user_text, namespace=course)
+                    logger.info(f"Retrieved context length: {len(context)} chars")
+                    if context:
+                        logger.info(f"Context preview: {context[:300]}...")
+                    else:
+                        logger.warning(f"No context retrieved for voice query in namespace '{course}'")
                 except Exception as e:
                     logger.error(f"Error retrieving context for voice message: {e}")
 
@@ -374,8 +380,14 @@ async def handle_update(update: dict):
             context = ""
             if current_mode == "conversational" and chat_id in user_courses:
                 course = user_courses[chat_id]
+                logger.info(f"Retrieving chunks for chat {chat_id}, course: {course}, query: {user_text[:100]}")
                 try:
                     context = await retrieve_chunks(user_text, namespace=course)
+                    logger.info(f"Retrieved context length: {len(context)} chars")
+                    if context:
+                        logger.info(f"Context preview: {context[:300]}...")
+                    else:
+                        logger.warning(f"No context retrieved for query in namespace '{course}'")
                 except Exception as e:
                     logger.error(f"Error retrieving context for text message: {e}")
 
