@@ -3,7 +3,7 @@ import uuid
 import asyncio
 import logging
 from fastapi import FastAPI, Request, BackgroundTasks
-from services.telegram import send_text_message, send_voice_message, process_voice_note, get_file_path, download_file
+from services.telegram import send_text_message, send_voice_message, process_voice_note, get_file_path, download_file , send_reply_keyboard
 from services.groq_ai import get_nurse_response
 from services.azure_speech import speech_to_text, text_to_speech
 from services.rag_api import ingest_document, retrieve_chunks
@@ -18,6 +18,22 @@ app = FastAPI()
 user_modes = {}
 user_courses = {}
 
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [{"text": "💬 Conversational"},  {"text": "🎙️ Audio to Notes"}],
+        [{"text": "📖 Read Slide"},       {"text": "📚 Course Advising"}],
+    ],
+    "resize_keyboard": True,
+    "persistent": True,
+}
+
+BUTTON_TO_MODE = {
+    "💬 Conversational":  "conversational",
+    "🎙️ Audio to Notes":  "audio_to_notes",
+    "📖 Read Slide":      "read_slide",
+    "📚 Course Advising": "course_advising",
+}
+
 WELCOME_MSG = (
     "Hello! I am your Study Mate. I help you study better \n\n"
     "Please choose a mode to get started:\n\n"
@@ -30,7 +46,7 @@ WELCOME_MSG = (
 MODE_CONFIRMATIONS = {
     "conversational": "💬 Conversational mode activated. Go ahead, ask me anything! If you want to use customized study materials, please upload a PDF with the course name as the caption.",
     "read_slide": "📖 Read Slide mode activated. Please send me your slide (image or file).",
-    "/audio_to_notes": "🎙️ Audio to Notes mode activated. Send me a voice note and I'll convert it into clean, structured notes.",
+    "audio_to_notes": "🎙️ Audio to Notes mode activated. Send me a voice note and I'll convert it into clean, structured notes.",
     "course_advising": "📚 Course Advising mode activated. Tell me about your course or what you need help with.",
 }
 
@@ -56,7 +72,7 @@ async def handle_update(update: dict):
 
         if "document" in message:
             if current_mode != "conversational":
-                 await send_text_message(chat_id, "Please switch to /conversational mode to upload course documents.")
+                 await send_text_message(chat_id, "Please switch to Conversational mode to upload course documents.")
                  return
 
             doc = message["document"]
@@ -94,7 +110,7 @@ async def handle_update(update: dict):
         # 1. Handle Voice Note
         elif "voice" in message:
             if not current_mode:
-                await send_text_message(chat_id, "Please select a mode first:\n\n" + WELCOME_MSG)
+                await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
                 return
 
             file_id = message["voice"]["file_id"]
@@ -149,7 +165,12 @@ async def handle_update(update: dict):
 
             # /start command
             if user_text == "/start":
-                await send_text_message(chat_id, WELCOME_MSG)
+                await send_reply_keyboard(chat_id, WELCOME_MSG, MAIN_KEYBOARD)
+                return
+            if user_text in BUTTON_TO_MODE:
+                selected_mode = BUTTON_TO_MODE[user_text]
+                user_modes[chat_id] = selected_mode
+                await send_text_message(chat_id, MODE_CONFIRMATIONS[selected_mode])
                 return
 
             # Mode selection commands
@@ -161,7 +182,7 @@ async def handle_update(update: dict):
 
             # Guard: no mode selected yet
             if not current_mode:
-                await send_text_message(chat_id, "Please select a mode first:\n\n" + WELCOME_MSG)
+                await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
                 return
 
             # Context retrieval
