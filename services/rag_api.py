@@ -19,7 +19,7 @@ async def ingest_document(file_path: str, namespace: str):
 async def retrieve_chunks(query: str, namespace: str):
     url = f"{API_BASE_URL.rstrip('/')}/retrieve"
     async with httpx.AsyncClient(timeout=30.0) as client:
-        params = {"query": query, "namespace": namespace, "top_k": 4}
+        params = {"query": query, "namespace": namespace}
         try:
             response = await client.get(url, params=params)
             response.raise_for_status()
