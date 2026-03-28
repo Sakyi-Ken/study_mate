@@ -1,25 +1,26 @@
-# Maternal-Nurse AI Assistant
+# Study Mate Telegram Bot
 
-Maternal-Nurse is a Telegram bot powered by generative AI to provide assistance in maternal healthcare. It supports both English and Twi languages, utilizing AI services from Groq, Azure Speech, and Ghana NLP for robust Voice-to-Text and Text-to-Speech capabilities.
+Study Mate is a Telegram bot powered by Groq and Azure Speech to help students learn faster from lectures and slides.
 
-## 🚀 Features
+## Features
 
-- **Multilingual Support:** Communicate in English or Twi via text or voice notes.
-- **Voice Capabilities:** Send voice notes and receive comprehensive audio responses.
-- **AI-Powered Diagnostics/Advice:** Integrated with Groq AI for fast and reliable medical/maternal advice.
+- Conversational study assistant for course questions.
+- Slide read-aloud mode for PDF slides.
+- Audio-to-notes mode for lecture audio and voice notes.
+- Optional course PDF ingestion for retrieval-augmented study chat.
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 Before you start, make sure you have the following installed:
 - Python 3.9 or higher
 - [FFmpeg](https://ffmpeg.org/download.html) (strictly required for audio conversion via `pydub`)
 
-## ⚙️ Environment Setup
+## Environment Setup
 
 1. **Clone the repository** (if you haven't already):
    ```bash
    git clone <repository_url>
-   cd Maternal-Nurse
+   cd study_mate
    ```
 
 2. **Create a Virtual Environment**:
@@ -47,13 +48,13 @@ Before you start, make sure you have the following installed:
    azure_stt_key=your_azure_stt_key_here
    azure_speech_region=your_azure_speech_region_here
 
-   # Ghana NLP (For Twi STT/TTS)
+   # Ghana NLP (optional, for Twi STT/TTS)
    ghana_nlp_api_key_primary=your_ghana_nlp_primary_key_here
    ghana_nlp_api_key_secondary=your_ghana_nlp_secondary_key_here
    ghana_nlp_subscription_key=your_ghana_nlp_subscription_key_here
    ```
 
-## 🏃‍♂️ Running the Project
+## Running the Project
 
 1. **Start the FastAPI Server**:
    Run the application using Uvicorn so it is ready to receive requests:
@@ -77,9 +78,18 @@ Before you start, make sure you have the following installed:
 
    The bot should now be actively listening to your webhook endpoints!
 
-## 💬 Usage
+## Usage
 
 - Open Telegram and search for your bot.
-- Start a chat.
-- Select your preferred language by typing `/english` or `/twi`.
-- You can now send text queries or voice notes, and the bot will reply accordingly!
+- Start a chat and run `/start`.
+- Select a mode:
+   - `/conversational` for course chat
+   - `/read_slide` to upload a slide PDF and get voice read-aloud
+   - `/audio_to_notes` to upload lecture audio and receive detailed notes
+   - `/course_advising` for study planning help
+
+## Notes
+
+- In `/read_slide`, only PDF documents are currently supported.
+- In `/audio_to_notes`, both Telegram voice notes and audio files are supported.
+- For RAG in `/conversational`, upload course PDF with caption as course name.
