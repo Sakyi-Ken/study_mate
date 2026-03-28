@@ -1,185 +1,140 @@
-WhatsApp Nurse
-AI-powered maternal & newborn health assistant for first-time mothers in Ghana
-📌 Overview
+Study Mate
+AI-powered Telegram study assistant for students
 
-WhatsApp Nurse is a focused AI assistant designed to support first-time mothers in Ghana during pregnancy and the first 6 months after childbirth.
+Overview
 
-It delivers clear, safe, and culturally relevant health guidance via WhatsApp, helping mothers understand symptoms, make informed decisions, and know when to seek medical care.
+Study Mate is a focused learning assistant that helps students understand lectures, extract insights from course materials, and convert spoken content into structured study notes.
 
-This is not a general chatbot — it is a narrow, safety-focused maternal health assistant built for real-world use in low-resource environments.
+It is designed for practical day-to-day study workflows:
+- Ask questions in conversational mode
+- Upload slide PDFs and get audio read-aloud
+- Upload lecture audio and receive detailed notes
+- Optionally attach course PDFs for retrieval-based answers
 
-🎯 Problem
+This is a study assistant, not a general-purpose chatbot.
 
-Maternal and newborn care in Ghana faces several challenges:
+Problem
 
-❌ Limited access to healthcare professionals, especially in rural areas
-❌ High reliance on informal advice (friends, family, social media)
-❌ Difficulty understanding medical instructions and prescriptions
-❌ Delays in recognizing danger signs during pregnancy and early infancy
-❌ Language and literacy barriers
+Students often struggle with:
+- Long lecture recordings that are hard to review quickly
+- Dense slide decks that are tiring to read
+- Difficulty turning raw audio into clean, structured notes
+- Fragmented course materials and weak context recall
 
 As a result:
+- Study sessions take longer than necessary
+- Important concepts are missed
+- Revision quality drops
 
-Preventable complications escalate
-Mothers experience anxiety and confusion
-Newborn health risks increase
-💡 Solution
+Solution
 
-A WhatsApp-based AI assistant that provides:
+A Telegram-based AI assistant that provides:
 
-1. Symptom Guidance
-
-Users can ask:
-
-“I have lower abdominal pain, is it normal?”
-“My baby has a fever, what should I do?”
-
-AI responds with:
-
-Simple explanation
-Likely severity (safe vs concerning)
-Clear next steps
-2. Medication & Instruction Explanation
+1. Conversational Study Help
 
 Users can ask:
+- "Explain overfitting in simple terms"
+- "What is the difference between TCP and UDP?"
 
-“What is this drug for?”
-“How should I take this medicine?”
+Assistant returns:
+- Clear, concise explanations
+- Step-by-step breakdowns when needed
+- Practical examples for understanding
 
-AI:
+2. Slide Read-Aloud (PDF)
 
-Translates medical instructions into simple language
-Explains purpose and usage safely
-3. “Danger Alert Mode” 🚨
+Users upload a slide PDF.
+The system:
+- Extracts text from the PDF
+- Generates audio with TTS
+- Sends voice playback in Telegram
 
-If symptoms match high-risk conditions, the system:
+3. Audio to Detailed Notes
 
-Immediately flags urgency
+Users send lecture audio (voice note or audio file).
+The system:
+- Transcribes audio to text
+- Generates detailed, structured notes
+- Returns notes with sections such as concepts, explanations, summary, and review questions
 
-Responds with:
+4. Course Material Retrieval (Optional)
 
-“⚠️ This may be serious. Please go to the nearest clinic or hospital immediately.”
+In conversational mode, users can upload a course PDF with caption as course name.
+The system indexes the document and retrieves relevant chunks for context-aware answers.
 
-4. Weekly Maternal & Baby Guidance
+Target Users
 
-Proactive messages like:
+- University and college students
+- Learners preparing for exams
+- Students revising from lecture recordings
 
-“At this stage of pregnancy, you may feel…”
-“Your baby may start doing this this week…”
+Design Principles
 
-Focus:
+- Clarity over verbosity
+- Accuracy over speculation
+- Structure over free-form output
+- Learning outcomes over generic chat
 
-What is normal
-What to watch out for
-5. Voice Interaction (Accessibility Feature)
-Accepts voice notes
-Responds in:
-English
-Twi (optional extension)
-👩🏾‍🍼 Target Users
-First-time mothers
-Pregnant women
-Mothers with newborns (0–6 months)
-Especially those:
-Outside major cities
-With limited medical knowledge
-Who primarily use WhatsApp for communication
-⚠️ Risks & Mitigation
-Risk 1: Unsafe Medical Advice
+System Architecture (High-Level)
 
-Mitigation:
-
-Restrict responses to approved maternal health guidelines
-Avoid diagnosis — focus on guidance
-Use conservative responses when uncertain
-Risk 2: Misinformation About Medication
-
-Mitigation:
-
-Only explain commonly used, verified medications
-
-Include disclaimers:
-
-“Follow your nurse or doctor’s instructions first.”
-
-Risk 3: Over-Reliance on AI
-
-Mitigation:
-
-Reinforce that AI is a support tool, not a doctor
-Encourage real-world care when needed
-Risk 4: Missed Emergency Cases
-
-Mitigation:
-
-Implement Danger Alert Mode
-Use symptom keyword + pattern detection
-Always err on the side of caution
-🧠 Design Principles
-Clarity over complexity
-Safety over completeness
-Guidance over decision-making
-Local relevance over global generalization
-🏗️ System Architecture (High-Level)
 Input Layer
-WhatsApp messages (text + voice)
+- Telegram webhook updates (text, voice, audio, document)
+
 Processing Layer
-Speech-to-text (for voice input)
-Intent detection (symptoms, medication, general advice)
-Context classification (pregnancy vs newborn)
+- Mode routing (`/conversational`, `/read_slide`, `/audio_to_notes`, `/course_advising`)
+- File download and preprocessing
+- Audio conversion to STT-ready WAV
+- PDF text extraction for slides
+
 AI Layer
-Controlled LLM responses
-Prompt constraints based on:
-Maternal health guidelines
-Safety rules
-Safety Layer
-Risk detection engine
-Emergency trigger system
+- Groq chat completion for explanations and note generation
+- Mode-specific prompting for lecture note formatting
+
+Speech Layer
+- Azure STT for audio transcription
+- Azure TTS for slide read-aloud and short spoken responses
+
+Retrieval Layer
+- External RAG API for ingest/retrieve operations in conversational mode
+
 Output Layer
-Simple text responses
-Optional voice responses
-⚙️ Core Features (MVP)
-✅ WhatsApp chatbot integration
-✅ Symptom Q&A system
-✅ Danger alert detection
-✅ Simple language explanations
-✅ Basic weekly guidance
-🚀 Future Enhancements
-🌍 Multi-language support (Twi, Hausa, Ewe)
-📍 Location-based hospital recommendations
-👩🏾‍⚕️ Human nurse escalation system
-📊 Health tracking (symptoms over time)
-🧾 Integration with antenatal records
-🧪 Example User Interaction
+- Telegram text replies
+- Telegram voice replies where applicable
+
+Current Scope
+
+Implemented:
+- Telegram webhook bot backend
+- Conversational responses with optional retrieval context
+- PDF-only slide read-aloud
+- Audio-to-notes for voice note and audio upload
+- Course PDF ingest for conversational mode
+
+Not yet implemented:
+- Slide image OCR
+- Multi-part note chunking for very long outputs
+- Per-user preferences for note style
+
+Example Interaction
 
 User:
+/uploads lecture audio in `/audio_to_notes`
 
-“My baby is not feeding well and feels hot”
+Assistant:
+- "Transcribing your lecture audio..."
+- "Generating detailed study notes..."
+- Returns structured notes text
 
-AI:
+User:
+/uploads slide PDF in `/read_slide`
 
-“This may be a sign of fever. Try checking your baby’s temperature if possible.
-If your baby is weak, not feeding, or feels very hot, please go to the nearest clinic immediately.”
+Assistant:
+- "Extracting slide text..."
+- Sends voice read-aloud output
 
-❤️ Social Impact
+Build Direction
 
-This system helps:
-
-Reduce maternal anxiety
-Improve early detection of complications
-Provide trusted, accessible health information
-Bridge the gap between patients and healthcare systems
-🧩 Why This Matters
-
-Instead of replacing healthcare professionals, WhatsApp Nurse:
-
-👉 Empowers mothers with understanding
-👉 Supports better decisions
-👉 Encourages timely medical careQ: What's your starting point for this build session?
-A: BACKEND AND WHATSAPP INTEGRATION
-
-Q: For speech-to-speech, which stack do you want to use?
-A: WE WILL BE USING SOME AZURE TEXT TO SPEECH AND SPEECH TO TEXT MODELS TO CONVERT USER SPEECH TO TEXT AND THEN PASS TO AN LLM, GET RESPONSE AND THEN PASS BACK TO TTS TO PRODUCE SPEECH. WE'LL DO ENGLISH FOR NOW
-
-Q: Which LLM will power the AI responses?
-A: groq api
+Near-term next steps:
+- Add long-note splitting to respect Telegram message limits
+- Add page-range controls for slide read-aloud
+- Add concise vs detailed note style toggle
