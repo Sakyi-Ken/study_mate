@@ -112,55 +112,17 @@ async def handle_update(update: dict):
                     if start_page and end_page:
                         await send_text_message(chat_id, f"📄 Reading pages {start_page}-{min(end_page, total_pages)} out of {total_pages}.")
 
-                    # Split slide text into chunks of 3200 characters for TTS
-                    max_chunk_size = 3200
-                    text_chunks = []
-                    remaining_text = slide_text
-                    while remaining_text:
-                        if len(remaining_text) <= max_chunk_size:
-                            text_chunks.append(remaining_text)
-                            break
-                        # Find a good break point (end of sentence or paragraph)
-                        chunk = remaining_text[:max_chunk_size]
-                        # Try to break at paragraph, then sentence, then word
-                        break_point = chunk.rfind('\n\n')
-                        if break_point < max_chunk_size // 2:
-                            break_point = chunk.rfind('. ')
-                        if break_point < max_chunk_size // 2:
-                            break_point = chunk.rfind(' ')
-                        if break_point < max_chunk_size // 2:
-                            break_point = max_chunk_size
-                        else:
-                            break_point += 1  # Include the break character
-                        text_chunks.append(remaining_text[:break_point].strip())
-                        remaining_text = remaining_text[break_point:].strip()
-
-                    total_parts = len(text_chunks)
-                    if total_parts > 1:
-                        await send_text_message(chat_id, f"📖 The slide is long, so I will read it in {total_parts} parts.")
-
                     await send_text_message(chat_id, "🔊 Reading your slide aloud...")
-
-                    # Read all parts sequentially
-                    all_success = True
-                    for i, chunk in enumerate(text_chunks):
-                        part_ogg_path = f"/tmp/{uuid.uuid4().hex}_slide_part{i+1}.ogg"
-                        try:
-                            if total_parts > 1:
-                                await send_text_message(chat_id, f"🔊 Part {i+1} of {total_parts}...")
-                            success = await text_to_speech(chunk, part_ogg_path)
-                            if success:
-                                await send_voice_message(chat_id, part_ogg_path)
-                            else:
-                                await send_text_message(chat_id, f"❌ Failed to generate audio for part {i+1}. Please try again.")
-                                all_success = False
-                                break
-                        finally:
-                            if os.path.exists(part_ogg_path):
-                                os.remove(part_ogg_path)
-
-                    if all_success and total_parts > 1:
-                        await send_text_message(chat_id, "✅ Finished reading all parts of your slide.")
+                    out_ogg_path = f"/tmp/{uuid.uuid4().hex}_slide.ogg"
+                    try:
+                        success = await text_to_speech(slide_text, out_ogg_path)
+                        if success:
+                            await send_voice_message(chat_id, out_ogg_path)
+                        else:
+                            await send_text_message(chat_id, "❌ I extracted the slide text, but audio generation failed. Please try again.")
+                    finally:
+                        if os.path.exists(out_ogg_path):
+                            os.remove(out_ogg_path)
                 except Exception as e:
                     logger.error(f"Error processing read_slide PDF: {e}")
                     await send_text_message(chat_id, "❌ Failed to process your slide PDF. Please try again.")
