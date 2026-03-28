@@ -70,7 +70,7 @@ async def handle_update(update: dict):
         chat_id = message["chat"]["id"]
         logger.info(f"Received update from chat {chat_id}")
 
-        current_mode = user_modes.get(chat_id, None)
+        current_mode = user_modes.get(chat_id)
 
         if "document" in message:
             if current_mode == "read_slide":
@@ -167,8 +167,8 @@ async def handle_update(update: dict):
                 return
 
             if current_mode != "conversational":
-                 await send_text_message(chat_id, "Please switch to Conversational mode to upload course documents.")
-                 return
+                await send_text_message(chat_id, "Please switch to Conversational mode to upload course documents.")
+                return
 
             doc = message["document"]
             caption = message.get("caption", "").strip()
@@ -182,15 +182,13 @@ async def handle_update(update: dict):
                 return
 
             file_id = doc["file_id"]
-            file_name = doc.get('file_name', 'document.pdf')
+            file_name = doc.get("file_name", "document.pdf")
             await send_text_message(chat_id, f"📥 Receiving '{file_name}' for course '{caption}'... This might take a moment.")
 
             local_path = f"/tmp/{uuid.uuid4().hex}.pdf"
             try:
                 tg_file_path = await get_file_path(file_id)
                 await download_file(tg_file_path, local_path)
-                
-                # Ingest document
                 await ingest_document(local_path, namespace=caption)
                 user_courses[chat_id] = caption
                 await send_text_message(chat_id, f"✅ Successfully ingested '{file_name}' under course '{caption}'. You can now ask questions about it!")
@@ -202,7 +200,6 @@ async def handle_update(update: dict):
                     os.remove(local_path)
             return
 
-        # 1. Handle Voice Note
         elif "voice" in message:
             if not current_mode:
                 await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
@@ -217,7 +214,6 @@ async def handle_update(update: dict):
                 return
 
             user_text = await speech_to_text(audio_path)
-
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
@@ -226,12 +222,13 @@ async def handle_update(update: dict):
                 return
 
             await send_text_message(chat_id, f"📝 You said: '{user_text}'")
-            
-            # In audio_to_notes mode, let the user know notes are being generated
-            if current_mode == "audio_to_notes":
-                await send_text_message(chat_id, "📋 Generating your notes...")
 
-            # Context retrieval
+            if current_mode == "audio_to_notes":
+                await send_text_message(chat_id, "📋 Generating detailed study notes from your lecture audio...")
+                ai_response = await get_study_response(user_text, mode=current_mode, context="")
+                await send_long_text_message(chat_id, ai_response)
+                return
+
             context = ""
             if current_mode == "conversational" and chat_id in user_courses:
                 course = user_courses[chat_id]
@@ -241,26 +238,25 @@ async def handle_update(update: dict):
                     logger.error(f"Error retrieving context for voice message: {e}")
 
             ai_response = await get_study_response(user_text, mode=current_mode, context=context)
+            out_ogg_path = f"/tmp/{uuid.uuid4().hex}_out.ogg"
+            success = await text_to_speech(ai_response, out_ogg_path)
 
-            if current_mode == "audio_to_notes":
-                await send_long_text_message(chat_id, ai_response)
+            if success:
+                await send_voice_message(chat_id, out_ogg_path)
             else:
-                out_ogg_path = f"/tmp/{uuid.uuid4().hex}_out.ogg"
-                success = await text_to_speech(ai_response, out_ogg_path)
+                await send_text_message(chat_id, "⚠️ I understood your voice note, but voice generation failed. Sending text response instead.")
+                await send_text_message(chat_id, ai_response)
 
-                if success:
-                    await send_voice_message(chat_id, out_ogg_path)
-                    await send_text_message(chat_id, ai_response)
-                else:
-                    await send_text_message(chat_id, ai_response)
+            if os.path.exists(out_ogg_path):
+                os.remove(out_ogg_path)
 
-                if os.path.exists(out_ogg_path):
-                    os.remove(out_ogg_path)
-
-        # 1b. Handle Audio File
         elif "audio" in message:
-            if current_mode != "audio_to_notes":
-                await send_text_message(chat_id, "Please switch to /audio_to_notes mode to upload lecture audio.")
+            if not current_mode:
+                await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
+                return
+
+            if current_mode not in {"audio_to_notes", "conversational"}:
+                await send_text_message(chat_id, "Please switch to /audio_to_notes or /conversational mode to upload audio.")
                 return
 
             audio = message["audio"]
@@ -276,7 +272,6 @@ async def handle_update(update: dict):
                 return
 
             user_text = await speech_to_text(audio_path)
-
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
@@ -284,37 +279,56 @@ async def handle_update(update: dict):
                 await send_text_message(chat_id, "❌ I could not transcribe the lecture audio clearly. Please try a cleaner recording.")
                 return
 
-            await send_text_message(chat_id, "📋 Generating detailed study notes from your lecture audio...")
-            ai_response = await get_study_response(user_text, mode=current_mode, context="")
-            await send_long_text_message(chat_id, ai_response)
+            if current_mode == "audio_to_notes":
+                await send_text_message(chat_id, "📋 Generating detailed study notes from your lecture audio...")
+                ai_response = await get_study_response(user_text, mode=current_mode, context="")
+                await send_long_text_message(chat_id, ai_response)
+                return
 
-        # 2. Handle Text Message
+            context = ""
+            if chat_id in user_courses:
+                course = user_courses[chat_id]
+                try:
+                    context = await retrieve_chunks(user_text, namespace=course)
+                except Exception as e:
+                    logger.error(f"Error retrieving context for audio message: {e}")
+
+            ai_response = await get_study_response(user_text, mode=current_mode, context=context)
+            out_ogg_path = f"/tmp/{uuid.uuid4().hex}_out.ogg"
+            success = await text_to_speech(ai_response, out_ogg_path)
+
+            if success:
+                await send_voice_message(chat_id, out_ogg_path)
+            else:
+                await send_text_message(chat_id, "⚠️ I understood your audio, but voice generation failed. Sending text response instead.")
+                await send_text_message(chat_id, ai_response)
+
+            if os.path.exists(out_ogg_path):
+                os.remove(out_ogg_path)
+
         elif "text" in message:
             user_text = message["text"]
 
-            # /start command
             if user_text == "/start":
                 await send_reply_keyboard(chat_id, WELCOME_MSG, MAIN_KEYBOARD)
                 return
+
             if user_text in BUTTON_TO_MODE:
                 selected_mode = BUTTON_TO_MODE[user_text]
                 user_modes[chat_id] = selected_mode
                 await send_text_message(chat_id, MODE_CONFIRMATIONS[selected_mode])
                 return
 
-            # Mode selection commands
             if user_text in SLASH_COMMANDS:
                 selected_mode = SLASH_COMMANDS[user_text]
                 user_modes[chat_id] = selected_mode
                 await send_text_message(chat_id, MODE_CONFIRMATIONS[selected_mode])
                 return
 
-            # Guard: no mode selected yet
             if not current_mode:
                 await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
                 return
 
-            # Context retrieval
             context = ""
             if current_mode == "conversational" and chat_id in user_courses:
                 course = user_courses[chat_id]
@@ -323,7 +337,6 @@ async def handle_update(update: dict):
                 except Exception as e:
                     logger.error(f"Error retrieving context for text message: {e}")
 
-            # Pass mode context to AI
             ai_response = await get_study_response(user_text, mode=current_mode, context=context)
             await send_text_message(chat_id, ai_response)
 
