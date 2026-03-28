@@ -3,11 +3,11 @@ import uuid
 import asyncio
 import logging
 from fastapi import FastAPI, Request, BackgroundTasks
-from services.telegram import send_text_message, send_voice_message, process_voice_note, get_file_path, download_file
-from services.groq_ai import get_nurse_response
+from services.telegram import send_text_message, send_long_text_message, send_voice_message, process_voice_note, process_audio_file, get_file_path, download_file
+from services.groq_ai import get_study_response
 from services.azure_speech import speech_to_text, text_to_speech
 from services.rag_api import ingest_document, retrieve_chunks
-from services.slide_reader import extract_text_from_pdf
+from services.slide_reader import parse_page_range, extract_text_from_pdf
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -22,16 +22,16 @@ user_courses = {}
 WELCOME_MSG = (
     "Hello! I am your Study Mate. I help you study better \n\n"
     "Please choose a mode to get started:\n\n"
-    "/conversational  — Chat with me about any health concern\n"
-    "/read_slide      — Send me a slide and I'll read it for you\n"
-    "/audio_to_notes — Send me a voice note and I'll convert it into clean, structured notes\n"
+    "/conversational  — Chat with me about any study topic\n"
+    "/read_slide      — Send me a slide PDF and I'll read it aloud\n"
+    "/audio_to_notes — Send me lecture audio and I'll convert it into detailed notes\n"
     "/course_advising — Get advice on your course or study plan\n"
 )
 
 MODE_CONFIRMATIONS = {
     "conversational": "💬 Conversational mode activated. Go ahead, ask me anything! If you want to use customized study materials, please upload a PDF with the course name as the caption.",
-    "read_slide": "📖 Read Slide mode activated. Please send me your slide (image or file).",
-    "/audio_to_notes": "🎙️ Audio to Notes mode activated. Send me a voice note and I'll convert it into clean, structured notes.",
+    "read_slide": "📖 Read Slide mode activated. Please send me your slide as a PDF document. Optional caption: '2' or '1-3' to read specific pages.",
+    "audio_to_notes": "🎙️ Audio to Notes mode activated. Send a voice note or lecture audio file and I'll convert it into detailed, structured notes.",
     "course_advising": "📚 Course Advising mode activated. Tell me about your course or what you need help with.",
 }
 
@@ -62,6 +62,12 @@ async def handle_update(update: dict):
                     await send_text_message(chat_id, "For now, please upload slides as a PDF document only.")
                     return
 
+                caption = message.get("caption", "").strip()
+                start_page, end_page, page_error = parse_page_range(caption)
+                if page_error:
+                    await send_text_message(chat_id, f"❌ {page_error}")
+                    return
+
                 file_id = doc["file_id"]
                 file_name = doc.get("file_name", "slides.pdf")
                 await send_text_message(chat_id, f"📥 Receiving '{file_name}'... extracting slide text now.")
@@ -73,10 +79,20 @@ async def handle_update(update: dict):
                     tg_file_path = await get_file_path(file_id)
                     await download_file(tg_file_path, local_path)
 
-                    slide_text = extract_text_from_pdf(local_path)
-                    if not slide_text.strip():
-                        await send_text_message(chat_id, "❌ I could not extract readable text from this slide PDF. Please try a clearer/exported PDF.")
+                    slide_text, total_pages = extract_text_from_pdf(local_path, start_page=start_page, end_page=end_page)
+                    if start_page and start_page > total_pages:
+                        await send_text_message(chat_id, f"❌ This PDF has only {total_pages} pages. Please choose a valid page range.")
                         return
+
+                    if not slide_text.strip():
+                        if start_page and end_page:
+                            await send_text_message(chat_id, "❌ I could not extract readable text from the selected pages. Try a different range or a clearer/exported PDF.")
+                        else:
+                            await send_text_message(chat_id, "❌ I could not extract readable text from this slide PDF. Please try a clearer/exported PDF.")
+                        return
+
+                    if start_page and end_page:
+                        await send_text_message(chat_id, f"📄 Reading pages {start_page}-{min(end_page, total_pages)} out of {total_pages}.")
 
                     speech_text = slide_text[:3200]
                     if len(slide_text) > 3200:
@@ -97,6 +113,37 @@ async def handle_update(update: dict):
                         os.remove(local_path)
                     if os.path.exists(out_ogg_path):
                         os.remove(out_ogg_path)
+                return
+
+            if current_mode == "audio_to_notes":
+                doc = message["document"]
+                mime_type = doc.get("mime_type", "")
+
+                if not mime_type.startswith("audio/"):
+                    await send_text_message(chat_id, "For audio_to_notes, please upload a lecture audio file or send a voice note.")
+                    return
+
+                file_id = doc["file_id"]
+                file_name = doc.get("file_name", "lecture_audio")
+                file_ext = file_name.split(".")[-1].lower() if "." in file_name else "bin"
+                await send_text_message(chat_id, f"🎧 Received '{file_name}'. Transcribing your lecture audio...")
+
+                audio_path = await process_audio_file(file_id, file_ext=file_ext)
+                if not audio_path:
+                    await send_text_message(chat_id, "❌ I couldn't process that audio file. Please try MP3, M4A, WAV, or OGG.")
+                    return
+
+                user_text = await speech_to_text(audio_path)
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+
+                if not user_text:
+                    await send_text_message(chat_id, "❌ I could not transcribe the lecture audio clearly. Please try a cleaner recording.")
+                    return
+
+                await send_text_message(chat_id, "📋 Generating detailed study notes from your lecture audio...")
+                ai_response = await get_study_response(user_text, mode=current_mode, context="")
+                await send_long_text_message(chat_id, ai_response)
                 return
 
             if current_mode != "conversational":
@@ -173,19 +220,53 @@ async def handle_update(update: dict):
                 except Exception as e:
                     logger.error(f"Error retrieving context for voice message: {e}")
 
-            ai_response = await get_nurse_response(user_text, mode=current_mode, context=context)
+            ai_response = await get_study_response(user_text, mode=current_mode, context=context)
 
-            out_ogg_path = f"/tmp/{uuid.uuid4().hex}_out.ogg"
-            success = await text_to_speech(ai_response, out_ogg_path)
-
-            if success:
-                await send_voice_message(chat_id, out_ogg_path)
-                await send_text_message(chat_id, ai_response)
+            if current_mode == "audio_to_notes":
+                await send_long_text_message(chat_id, ai_response)
             else:
-                await send_text_message(chat_id, ai_response)
+                out_ogg_path = f"/tmp/{uuid.uuid4().hex}_out.ogg"
+                success = await text_to_speech(ai_response, out_ogg_path)
 
-            if os.path.exists(out_ogg_path):
-                os.remove(out_ogg_path)
+                if success:
+                    await send_voice_message(chat_id, out_ogg_path)
+                    await send_text_message(chat_id, ai_response)
+                else:
+                    await send_text_message(chat_id, ai_response)
+
+                if os.path.exists(out_ogg_path):
+                    os.remove(out_ogg_path)
+
+        # 1b. Handle Audio File
+        elif "audio" in message:
+            if current_mode != "audio_to_notes":
+                await send_text_message(chat_id, "Please switch to /audio_to_notes mode to upload lecture audio.")
+                return
+
+            audio = message["audio"]
+            file_id = audio["file_id"]
+            file_name = audio.get("file_name", "lecture_audio")
+            file_ext = file_name.split(".")[-1].lower() if "." in file_name else "bin"
+
+            await send_text_message(chat_id, f"🎧 Received '{file_name}'. Transcribing your lecture audio...")
+
+            audio_path = await process_audio_file(file_id, file_ext=file_ext)
+            if not audio_path:
+                await send_text_message(chat_id, "❌ I couldn't process that audio file. Please try MP3, M4A, WAV, or OGG.")
+                return
+
+            user_text = await speech_to_text(audio_path)
+
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+
+            if not user_text:
+                await send_text_message(chat_id, "❌ I could not transcribe the lecture audio clearly. Please try a cleaner recording.")
+                return
+
+            await send_text_message(chat_id, "📋 Generating detailed study notes from your lecture audio...")
+            ai_response = await get_study_response(user_text, mode=current_mode, context="")
+            await send_long_text_message(chat_id, ai_response)
 
         # 2. Handle Text Message
         elif "text" in message:
@@ -218,7 +299,7 @@ async def handle_update(update: dict):
                     logger.error(f"Error retrieving context for text message: {e}")
 
             # Pass mode context to AI
-            ai_response = await get_nurse_response(user_text, mode=current_mode, context=context)
+            ai_response = await get_study_response(user_text, mode=current_mode, context=context)
             await send_text_message(chat_id, ai_response)
 
     except Exception as e:
