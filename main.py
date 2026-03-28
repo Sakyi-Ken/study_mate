@@ -3,7 +3,7 @@ import uuid
 import asyncio
 import logging
 from fastapi import FastAPI, Request, BackgroundTasks
-from services.telegram import send_text_message, send_long_text_message, send_voice_message, process_voice_note, process_audio_file, get_file_path, download_file
+from services.telegram import send_text_message, send_reply_keyboard, send_long_text_message, send_voice_message, process_voice_note, process_audio_file, get_file_path, download_file
 from services.groq_ai import get_study_response
 from services.azure_speech import speech_to_text, text_to_speech
 from services.rag_api import ingest_document, retrieve_chunks
