@@ -71,8 +71,10 @@ async def handle_update(update: dict):
         logger.info(f"Received update from chat {chat_id}")
 
         current_mode = user_modes.get(chat_id)
+        logger.info(f"Current mode for chat {chat_id}: {current_mode}")
 
         if "document" in message:
+            logger.info(f"Routing document message for chat {chat_id} in mode {current_mode}")
             if current_mode == "read_slide":
                 doc = message["document"]
                 if doc.get("mime_type", "") != "application/pdf":
@@ -201,6 +203,7 @@ async def handle_update(update: dict):
             return
 
         elif "voice" in message:
+            logger.info(f"Routing voice message for chat {chat_id} in mode {current_mode}")
             if not current_mode:
                 await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
                 return
@@ -251,6 +254,7 @@ async def handle_update(update: dict):
                 os.remove(out_ogg_path)
 
         elif "audio" in message:
+            logger.info(f"Routing audio message for chat {chat_id} in mode {current_mode}")
             if not current_mode:
                 await send_reply_keyboard(chat_id, "Please select a mode first 👇", MAIN_KEYBOARD)
                 return
@@ -307,6 +311,7 @@ async def handle_update(update: dict):
                 os.remove(out_ogg_path)
 
         elif "text" in message:
+            logger.info(f"Routing text message for chat {chat_id}")
             user_text = message["text"]
 
             if user_text == "/start":
@@ -316,12 +321,14 @@ async def handle_update(update: dict):
             if user_text in BUTTON_TO_MODE:
                 selected_mode = BUTTON_TO_MODE[user_text]
                 user_modes[chat_id] = selected_mode
+                logger.info(f"Chat {chat_id} selected mode via button: {selected_mode}")
                 await send_text_message(chat_id, MODE_CONFIRMATIONS[selected_mode])
                 return
 
             if user_text in SLASH_COMMANDS:
                 selected_mode = SLASH_COMMANDS[user_text]
                 user_modes[chat_id] = selected_mode
+                logger.info(f"Chat {chat_id} selected mode via slash: {selected_mode}")
                 await send_text_message(chat_id, MODE_CONFIRMATIONS[selected_mode])
                 return
 
