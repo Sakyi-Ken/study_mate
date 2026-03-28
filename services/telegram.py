@@ -64,6 +64,25 @@ async def send_text_message(chat_id: int, text: str):
         logger.error(f"Error sending message to chat {chat_id}: {e}")
 
 
+async def send_reply_keyboard(chat_id: int, text: str, keyboard: dict):
+    """Send a message with a custom reply keyboard."""
+    url = f"{TELEGRAM_API_URL}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "reply_markup": keyboard,
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, timeout=10)
+            if response.status_code != 200:
+                logger.error(f"Failed to send keyboard message: {response.status_code} - {response.text}")
+            else:
+                logger.info(f"Keyboard message sent to chat {chat_id}")
+    except Exception as e:
+        logger.error(f"Error sending keyboard message to chat {chat_id}: {e}")
+
+
 async def send_long_text_message(chat_id: int, text: str):
     """Send long text in multiple Telegram-safe messages."""
     for chunk in split_text_for_telegram(text):
