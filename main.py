@@ -7,6 +7,7 @@ from services.telegram import send_text_message, send_voice_message, process_voi
 from services.groq_ai import get_nurse_response
 from services.azure_speech import speech_to_text, text_to_speech
 from services.rag_api import ingest_document, retrieve_chunks
+from services.slide_reader import extract_text_from_pdf
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -55,6 +56,49 @@ async def handle_update(update: dict):
         current_mode = user_modes.get(chat_id, None)
 
         if "document" in message:
+            if current_mode == "read_slide":
+                doc = message["document"]
+                if doc.get("mime_type", "") != "application/pdf":
+                    await send_text_message(chat_id, "For now, please upload slides as a PDF document only.")
+                    return
+
+                file_id = doc["file_id"]
+                file_name = doc.get("file_name", "slides.pdf")
+                await send_text_message(chat_id, f"📥 Receiving '{file_name}'... extracting slide text now.")
+
+                local_path = f"/tmp/{uuid.uuid4().hex}.pdf"
+                out_ogg_path = f"/tmp/{uuid.uuid4().hex}_slide.ogg"
+
+                try:
+                    tg_file_path = await get_file_path(file_id)
+                    await download_file(tg_file_path, local_path)
+
+                    slide_text = extract_text_from_pdf(local_path)
+                    if not slide_text.strip():
+                        await send_text_message(chat_id, "❌ I could not extract readable text from this slide PDF. Please try a clearer/exported PDF.")
+                        return
+
+                    speech_text = slide_text[:3200]
+                    if len(slide_text) > 3200:
+                        await send_text_message(chat_id, "📖 The slide is long, so I will read the first part now.")
+
+                    await send_text_message(chat_id, "🔊 Reading your slide aloud...")
+                    success = await text_to_speech(speech_text, out_ogg_path)
+
+                    if success:
+                        await send_voice_message(chat_id, out_ogg_path)
+                    else:
+                        await send_text_message(chat_id, "❌ I extracted the slide text, but audio generation failed. Please try again.")
+                except Exception as e:
+                    logger.error(f"Error processing read_slide PDF: {e}")
+                    await send_text_message(chat_id, "❌ Failed to process your slide PDF. Please try again.")
+                finally:
+                    if os.path.exists(local_path):
+                        os.remove(local_path)
+                    if os.path.exists(out_ogg_path):
+                        os.remove(out_ogg_path)
+                return
+
             if current_mode != "conversational":
                  await send_text_message(chat_id, "Please switch to /conversational mode to upload course documents.")
                  return
